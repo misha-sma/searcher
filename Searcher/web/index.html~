@@ -1,0 +1,7 @@
+<html>
+<body>
+misha-sma search
+<input type="text" name="textField" size="10" maxlength="100" value="Input query">
+<input type="submit" name="submitButton" value="Search">
+</body>
+</html>
