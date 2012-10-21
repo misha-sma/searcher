@@ -49,6 +49,12 @@ public class HttpServer {
 				String url = getUrl(headers);
 				if (url.equals("favicon.ico")) {
 					writeFaviconResponse();
+				} else if (url.startsWith("?query=")) {
+					int andIndex = url.indexOf('&');
+					String query = andIndex > 0 ? url.substring(7, andIndex) : url.substring(7);
+					System.err.println("query=" + query);
+					// RUSSIAN URL ENCODING
+					// SEARCH
 				} else {
 					writeResponse(HOME_PAGE);
 				}
