@@ -1,3 +1,5 @@
+package misha_sma;
+
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -20,7 +22,8 @@ import org.apache.http.params.HttpConnectionParams;
 import org.apache.http.params.HttpParams;
 import org.apache.http.util.EntityUtils;
 
-import util.Util;
+import misha_sma.util.ConfigProperties;
+import misha_sma.util.Util;
 
 public class Indexator {
 	public static final int RANDOM_COUNT = 1000;
@@ -78,30 +81,29 @@ public class Indexator {
 				}
 
 				if (entity != null) {
-					// String mimeType=EntityUtils.getContentMimeType(entity);
 					boolean isBinary = isBinary(mimeType);
-
-					String html = EntityUtils.toString(entity);
+					String extension = isBinary ? "bin" : "html";
 					int num = (int) (Math.random() * RANDOM_COUNT);
-					String name = System.currentTimeMillis() + "_" + num + ".html";
-					String fullName = "/home/misha-sma/searcherProjects/html/" + name;
-					String textName = "/home/misha-sma/searcherProjects/text/" + name;
-					Util.writeText2File(html, fullName);
-					// String[] args = new String[7];
-					// args[0] = "java";
-					// args[1] = "-jar";
-					// args[2] = "lib/tika-app-1.2.jar";
-					// args[3] = "-t";
-					// args[4] = fullName;
-					// args[5] = ">";
-					// args[6] = textName;
-					// Runtime.getRuntime().exec(args, null, new File("./"));
-					// try {
-					// Thread.sleep(10000);
-					// } catch (InterruptedException e) {
-					// e.printStackTrace();
-					// }
-					// String text = Util.loadText(textName);
+					String name = System.currentTimeMillis() + "_" + num + "." + extension;
+					String fullName = ConfigProperties.PATH_2_HTML + "/" + name;
+					String textName = ConfigProperties.PATH_2_FULLTEXT + "/" + name;
+					String html = "";
+					if (isBinary) {
+						byte[] bytes = EntityUtils.toByteArray(entity);
+						Util.writeBytes2File(bytes, fullName);
+					} else {
+						html = EntityUtils.toString(entity);
+						Util.writeText2File(html, fullName);
+					}
+
+					String[] args = new String[5];
+					args[0] = "java";
+					args[1] = "-jar";
+					args[2] = "lib/tika-app-1.2.jar";
+					args[3] = "-T";
+					args[4] = fullName;
+					String text = Util.runTika(args, new File("./"));
+					Util.writeText2File(text, textName);
 					// StringTokenizer tokenizer = new StringTokenizer(text);
 					// StringBuilder builder = new StringBuilder();
 					// while (tokenizer.hasMoreTokens()) {
@@ -111,10 +113,14 @@ public class Indexator {
 					// put builder.toString() to lucene
 
 					// find urls
-					List<String> urls = findUrls(html, url);
-					System.out.println("urls=" + urls);
-					for (String url : urls) {
-						pool.submit(new SendUrl(url));
+					if (isBinary) {
+
+					} else {
+						List<String> urls = findUrls(html, url);
+						System.out.println("urls=" + urls);
+						for (String url : urls) {
+							// pool.submit(new SendUrl(url));
+						}
 					}
 
 				}
@@ -130,6 +136,11 @@ public class Indexator {
 
 	public static boolean isBinary(String mimeType) {
 		return !(mimeType.contains("html") || mimeType.contains("text"));
+	}
+
+	public static String getExtension(String mimeType) {
+		return mimeType.contains("html") ? "html" : mimeType.contains("pdf") ? "pdf" : mimeType.contains("doc") ? "doc"
+				: "unknown";
 	}
 
 	public static List<String> findUrls(String html, String originalUrl) {
