@@ -5,10 +5,13 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.StringTokenizer;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.apache.http.Header;
 import org.apache.http.HttpEntity;
@@ -23,6 +26,7 @@ import org.apache.http.params.HttpParams;
 import org.apache.http.util.EntityUtils;
 
 import misha_sma.util.ConfigProperties;
+import misha_sma.util.Pair;
 import misha_sma.util.Util;
 
 public class Indexator {
@@ -30,11 +34,21 @@ public class Indexator {
 	public static final int THREADS_COUNT = 10;
 	public static final int REQUESTS_COUNT = 10000;
 	public static final int TIMEOUT = 10000;
+	public static final long DELTA_INDEXING_TIME = 10000;
 	public static final String HREF = "href=\"";
 	public static final String HTTP = "http";
 	public static final String WWW = "www";
 	public static final Set<String> EXTENSIONS = new HashSet<String>();
 	public static final int MAX_EXTENSION_LENGTH = 4;
+
+	public static final String DOMENS = "(com|edu|gov|mil|net|org|info|su|af|al|dz|as|ad|ao|ai|aq|ag|ar|am|aw|au|at|az|bs|bh|bd|bb|by|be|bz|bj|bm|bt|bo|ba|bw|bv|br|io|bn|bg|bf|bi|kh|cm|ca|cv|ky|cf|td|cl|cn|cx|cc|co|km|cg|ck|cr|ci|hr|cu|cy|cz|dk|dj|dm|do|tp|ec|eg|sv|gq|er|ee|et|fk|fo|fj|fi|fr|fx|gf|pf|tf|ga|gm|ge|de|gh|gi|gr|gl|gd|gp|gu|gt|gg|gn|gw|gy|ht|hm|hn|hk|hu|is|in|id|ir|iq|ie|im|il|it|jm|jp|je|jo|kz|ke|ki|kp|kr|kw|kg|la|lv|lb|ls|lr|ly|li|lt|lu|mo|mk|mg|mw|my|mv|ml|mt|mh|mq|mr|mu|yt|mx|fm|md|mc|mn|ms|ma|mz|mm|na|nr|np|nl|an|nc|nz|ni|ne|ng|nu|nf|mp|no|om|pk|pw|pa|pg|py|pe|ph|pn|pl|pt|pr|qa|re|ro|ru|rw|kn|lc|vc|ws|sm|st|sa|sn|sc|sl|sg|sk|si|sb|so|za|gs|es|lk|sh|no|sd|sr|sj|sz|se|ch|sy|tw|tj|tz|th|tg|tk|to|tt|tn|tr|tm|tc|tv|ug|ua|ae|uk|us|um|uy|uz|vu|va|ve|vn|vg|vi|wf|eh|ye|yu|zr|zm|zw)";
+	public static final String REGEXP_URL = "((http|https)\\u003A\\u002F{2})?[\\p{Alnum}\\u002E\\u002D\\u005F]{4,255}[\\u002E]"
+			+ DOMENS
+			+ "((\\u002F)[\\p{Alnum}\\u002D\\u0026\\u002B\\u005F\\u003F\\u003D\\u0023\\u0025\\u002F\\u002E]*)?";
+	public static final Pattern URL_PATTERN = Pattern.compile(REGEXP_URL);
+
+	public static Map<String, Pair<String, Long>> urlsMap;
+	public static final Object GLOBAL_SYNCHRONIZE_OBJECT = new Object();
 
 	private final static ExecutorService pool = Executors.newFixedThreadPool(THREADS_COUNT);
 
@@ -82,9 +96,9 @@ public class Indexator {
 
 				if (entity != null) {
 					boolean isBinary = isBinary(mimeType);
-					String extension = isBinary ? "bin" : "html";
+					String extension = isBinary ? "" : ".html";
 					int num = (int) (Math.random() * RANDOM_COUNT);
-					String name = System.currentTimeMillis() + "_" + num + "." + extension;
+					String name = System.currentTimeMillis() + "_" + num + extension;
 					String fullName = ConfigProperties.PATH_2_HTML + "/" + name;
 					String textName = ConfigProperties.PATH_2_FULLTEXT + "/" + name;
 					String html = "";
@@ -113,16 +127,37 @@ public class Indexator {
 					// put builder.toString() to lucene
 
 					// find urls
-					if (isBinary) {
-
-					} else {
-						List<String> urls = findUrls(html, url);
-						System.out.println("urls=" + urls);
-						for (String url : urls) {
-							// pool.submit(new SendUrl(url));
+					List<String> urls = isBinary ? findUrlsBinary(text) : findUrls(html, url);
+					System.out.println("urls=" + urls);
+					String hash = Util.getMD5(text);
+					System.out.println("hash=" + hash);
+					if (hash == null) {
+						return;
+					}
+					synchronized (GLOBAL_SYNCHRONIZE_OBJECT) {
+						long currentTime = System.currentTimeMillis();
+						if (urlsMap.containsKey(url)) {
+							Pair<String, Long> value = urlsMap.get(url);
+							if (currentTime - value.getRight() > DELTA_INDEXING_TIME && !hash.equals(value.getLeft())) {
+								SearchManager.getInstance().updateUrl(url, text, hash, currentTime);
+								urlsMap.put(url, new Pair<String, Long>(hash, currentTime));
+							}
+						} else {
+							SearchManager.getInstance().addUrlToIndex(url, text, hash, currentTime);
+							urlsMap.put(url, new Pair<String, Long>(hash, currentTime));
+						}
+						for (String parsedUrl : urls) {
+							if (urlsMap.containsKey(parsedUrl)) {
+								Pair<String, Long> value = urlsMap.get(parsedUrl);
+								currentTime = System.currentTimeMillis();
+								if (currentTime - value.getRight() > DELTA_INDEXING_TIME) {
+									pool.submit(new SendUrl(parsedUrl));
+								}
+							} else {
+								pool.submit(new SendUrl(parsedUrl));
+							}
 						}
 					}
-
 				}
 			} catch (ClientProtocolException e) {
 				e.printStackTrace();
@@ -141,6 +176,22 @@ public class Indexator {
 	public static String getExtension(String mimeType) {
 		return mimeType.contains("html") ? "html" : mimeType.contains("pdf") ? "pdf" : mimeType.contains("doc") ? "doc"
 				: "unknown";
+	}
+
+	public static List<String> findUrlsBinary(String text) {
+		List<String> urls = new ArrayList<String>();
+		Matcher matcher = URL_PATTERN.matcher(text);
+		while (matcher.find()) {
+			String url = matcher.group().toLowerCase();
+			url = url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
+			if (url.startsWith(WWW)) {
+				url = "http://" + url;
+			} else if (!url.startsWith(HTTP)) {
+				url = "http://www." + url;
+			}
+			urls.add(url);
+		}
+		return urls;
 	}
 
 	public static List<String> findUrls(String html, String originalUrl) {
@@ -204,6 +255,7 @@ public class Indexator {
 	public static void main(String[] args) {
 		loadExtensions();
 		List<String> urls = loadUrls();
+		urlsMap = SearchManager.getInstance().loadUrlsMap();
 		pool.submit(new SendUrl("http://en.wikipedia.org/wiki/Cassini%E2%80%93Huygens"));
 		// pool.submit(new
 		// SendUrl("http://descanso.jpl.nasa.gov/DPSummary/Descanso3--Cassini2.pdf"));

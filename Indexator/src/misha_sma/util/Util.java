@@ -9,6 +9,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
+import java.math.BigInteger;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 
 import org.apache.log4j.Logger;
 
@@ -180,4 +183,17 @@ public class Util {
 		thread.start();
 		return thread;
 	}
+
+	public static String getMD5(String src) {
+		MessageDigest m;
+		try {
+			m = MessageDigest.getInstance("MD5");
+			m.update(src.getBytes(), 0, src.length());
+			return new BigInteger(1, m.digest()).toString(16);
+		} catch (NoSuchAlgorithmException e) {
+			logger.error("Error while md5 calculating!", e);
+			return null;
+		}
+	}
+
 }
