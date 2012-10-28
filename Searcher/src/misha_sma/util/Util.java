@@ -1,13 +1,18 @@
-package util;
+package misha_sma.util;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
+
+import org.apache.log4j.Logger;
 
 public class Util {
+	private static final Logger logger = Logger.getLogger(Util.class);
+
+	private Util() {
+	}
+
 	public static String loadText(File file) {
 		try {
 			FileInputStream input = new FileInputStream(file);
@@ -16,28 +21,14 @@ public class Util {
 			input.close();
 			return new String(bytes);
 		} catch (FileNotFoundException e) {
-			e.printStackTrace();
+			logger.error(e);
 		} catch (IOException e) {
-			e.printStackTrace();
+			logger.error(e);
 		}
 		return null;
 	}
 
 	public static String loadText(String fileName) {
 		return loadText(new File(fileName));
-	}
-
-	public static void writeText2File(String text, String path) {
-		try {
-			FileOutputStream output = new FileOutputStream(path);
-			output.write(text.getBytes("UTF8"));
-			output.close();
-		} catch (FileNotFoundException e) {
-			e.printStackTrace();
-		} catch (UnsupportedEncodingException e) {
-			e.printStackTrace();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
 	}
 }

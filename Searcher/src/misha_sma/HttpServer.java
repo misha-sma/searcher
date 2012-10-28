@@ -1,3 +1,5 @@
+package misha_sma;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
@@ -10,7 +12,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.StringTokenizer;
 
-import util.Util;
+import misha_sma.util.Util;
 
 public class HttpServer {
 	public static final int PORT = 8080;
