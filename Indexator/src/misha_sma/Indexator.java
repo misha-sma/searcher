@@ -18,6 +18,7 @@ import java.util.regex.Pattern;
 import org.apache.http.Header;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
+import org.apache.http.StatusLine;
 import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.params.AllClientPNames;
@@ -34,7 +35,8 @@ import misha_sma.util.Util;
 
 public class Indexator {
 	public static final int RANDOM_COUNT = 1000;
-	public static final int THREADS_COUNT = 10;
+	public static final int URLS_COUNT = 20;
+	public static final int THREADS_COUNT = 1;
 	public static final int TIMEOUT = 10000;
 	public static final long DELTA_INDEXING_TIME = 10000;
 	public static final String HREF = "href=\"";
@@ -42,6 +44,7 @@ public class Indexator {
 	public static final String WWW = "www";
 	public static final Set<String> EXTENSIONS = new HashSet<String>();
 	public static final int MAX_EXTENSION_LENGTH = 4;
+	private static int currentUrlsCount = 0;
 
 	public static final String DOMENS = "(com|edu|gov|mil|net|org|info|su|af|al|dz|as|ad|ao|ai|aq|ag|ar|am|aw|au|at|az|bs|bh|bd|bb|by|be|bz|bj|bm|bt|bo|ba|bw|bv|br|io|bn|bg|bf|bi|kh|cm|ca|cv|ky|cf|td|cl|cn|cx|cc|co|km|cg|ck|cr|ci|hr|cu|cy|cz|dk|dj|dm|do|tp|ec|eg|sv|gq|er|ee|et|fk|fo|fj|fi|fr|fx|gf|pf|tf|ga|gm|ge|de|gh|gi|gr|gl|gd|gp|gu|gt|gg|gn|gw|gy|ht|hm|hn|hk|hu|is|in|id|ir|iq|ie|im|il|it|jm|jp|je|jo|kz|ke|ki|kp|kr|kw|kg|la|lv|lb|ls|lr|ly|li|lt|lu|mo|mk|mg|mw|my|mv|ml|mt|mh|mq|mr|mu|yt|mx|fm|md|mc|mn|ms|ma|mz|mm|na|nr|np|nl|an|nc|nz|ni|ne|ng|nu|nf|mp|no|om|pk|pw|pa|pg|py|pe|ph|pn|pl|pt|pr|qa|re|ro|ru|rw|kn|lc|vc|ws|sm|st|sa|sn|sc|sl|sg|sk|si|sb|so|za|gs|es|lk|sh|no|sd|sr|sj|sz|se|ch|sy|tw|tj|tz|th|tg|tk|to|tt|tn|tr|tm|tc|tv|ug|ua|ae|uk|us|um|uy|uz|vu|va|ve|vn|vg|vi|wf|eh|ye|yu|zr|zm|zw)";
 	public static final String REGEXP_URL = "((http|https)\\u003A\\u002F{2})?[\\p{Alnum}\\u002E\\u002D\\u005F]{4,255}[\\u002E]"
@@ -50,6 +53,7 @@ public class Indexator {
 	public static final Pattern URL_PATTERN = Pattern.compile(REGEXP_URL);
 
 	public static Map<String, Pair<String, Long>> urlsMap;
+	public static Set<String> waitedUrls = new HashSet<String>();
 	public static final Object GLOBAL_SYNCHRONIZE_OBJECT = new Object();
 
 	private final static ExecutorService pool = Executors.newFixedThreadPool(THREADS_COUNT);
@@ -82,13 +86,18 @@ public class Indexator {
 				logger.info("==End executing request Time=" + (System.currentTimeMillis() - initTime));
 				HttpEntity entity = rsp.getEntity();
 
-				logger.info("---------------HEADERS-------------------------");
-				logger.info(rsp.getStatusLine());
-				Header[] headers = rsp.getAllHeaders();
-				for (int i = 0; i < headers.length; i++) {
-					logger.info(headers[i]);
+				StatusLine statusLine = rsp.getStatusLine();
+				logger.info(statusLine);
+				int status = statusLine.getStatusCode();
+				if (status != 200) {
+					return;
 				}
-				logger.info("----------------------------------------");
+				Header[] headers = rsp.getAllHeaders();
+				// logger.info("---------------HEADERS-------------------------");
+				// for (int i = 0; i < headers.length; i++) {
+				// logger.info(headers[i]);
+				// }
+				// logger.info("----------------------------------------");
 				String mimeType = "text/html";
 				for (Header header : headers) {
 					if (header.getName().toLowerCase().equals("content-type")) {
@@ -141,19 +150,34 @@ public class Indexator {
 							if (currentTime - value.getRight() > DELTA_INDEXING_TIME && !hash.equals(value.getLeft())) {
 								SearchManager.getInstance().updateUrl(url, text, hash, currentTime);
 								urlsMap.put(url, new Pair<String, Long>(hash, currentTime));
+								logger.info("==Update url " + url + " in lucene");
+								++currentUrlsCount;
 							}
 						} else {
 							SearchManager.getInstance().addUrlToIndex(url, text, hash, currentTime);
 							urlsMap.put(url, new Pair<String, Long>(hash, currentTime));
+							logger.info("==Add url " + url + " in lucene");
+							++currentUrlsCount;
+						}
+						waitedUrls.remove(url);
+						if (currentUrlsCount >= URLS_COUNT) {
+							SearchManager.getInstance().closeIndex();
+							logger.info("END INDEXING!!!");
+							System.exit(0);
 						}
 						for (String parsedUrl : urls) {
+							if (waitedUrls.contains(parsedUrl)) {
+								continue;
+							}
 							if (urlsMap.containsKey(parsedUrl)) {
 								Pair<String, Long> value = urlsMap.get(parsedUrl);
 								currentTime = System.currentTimeMillis();
 								if (currentTime - value.getRight() > DELTA_INDEXING_TIME) {
+									waitedUrls.add(parsedUrl);
 									pool.submit(new SendUrl(parsedUrl));
 								}
 							} else {
+								waitedUrls.add(parsedUrl);
 								pool.submit(new SendUrl(parsedUrl));
 							}
 						}
@@ -182,7 +206,7 @@ public class Indexator {
 		List<String> urls = new ArrayList<String>();
 		Matcher matcher = URL_PATTERN.matcher(text);
 		while (matcher.find()) {
-			String url = matcher.group().toLowerCase();
+			String url = matcher.group();
 			url = url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
 			if (url.startsWith(WWW)) {
 				url = "http://" + url;
@@ -211,9 +235,10 @@ public class Indexator {
 		while (hrefIndex > 0 && quoteIndex > hrefIndex) {
 			String url = body.substring(hrefIndex + HREF.length(), quoteIndex);
 			if (!url.startsWith("#")) {
-				url = url.trim().toLowerCase();
+				url = url.trim();
 				url = url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
-				url = url.startsWith(WWW) || url.startsWith("//") ? HTTP + "://" + url : url;
+				url = url.startsWith(WWW) ? HTTP + "://" + url : url;
+				url = url.startsWith("//") ? HTTP + ":" + url : url;
 				url = url.startsWith("/") ? baseUrl + url : url;
 				if (url.startsWith(HTTP) && checkExtension(url)) {
 					try {
@@ -266,7 +291,9 @@ public class Indexator {
 		loadExtensions();
 		List<String> urls = loadUrls();
 		urlsMap = SearchManager.getInstance().loadUrlsMap();
-		pool.submit(new SendUrl("http://en.wikipedia.org/wiki/Cassini%E2%80%93Huygens"));
+		pool.submit(new SendUrl("http://ru.wikipedia.org/wiki/кассини-Гюйгенс"));
+		// pool.submit(new
+		// SendUrl("http://en.wikipedia.org/wiki/Cassini%E2%80%93Huygens"));
 		// pool.submit(new
 		// SendUrl("http://descanso.jpl.nasa.gov/DPSummary/Descanso3--Cassini2.pdf"));
 		// for (String url : urls) {

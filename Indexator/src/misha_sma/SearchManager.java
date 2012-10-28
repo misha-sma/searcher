@@ -6,8 +6,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 
 import misha_sma.util.ConfigProperties;
 import misha_sma.util.Pair;
@@ -22,14 +20,12 @@ import org.apache.lucene.document.Field.Store;
 import org.apache.lucene.document.FieldType;
 import org.apache.lucene.document.LongField;
 import org.apache.lucene.document.StringField;
-import org.apache.lucene.index.CorruptIndexException;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.index.IndexWriterConfig.OpenMode;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.store.Directory;
-import org.apache.lucene.store.LockObtainFailedException;
 import org.apache.lucene.store.NIOFSDirectory;
 import org.apache.lucene.util.Version;
 
@@ -55,13 +51,14 @@ public class SearchManager {
 	public static final String TIME = "time";
 
 	public static final Version VERSION = Version.LUCENE_40;
+	public static final int MEMORY = 64;
 
 	private final Set<String> selectFields = new HashSet<String>();
 
 	private Directory directory;
 	private Analyzer analyzer;
-
-	private static Lock luceneWriteLock = new ReentrantLock();
+	IndexWriterConfig iwConfig;
+	IndexWriter iwriter;
 
 	private SearchManager() {
 		selectFields.add(URL);
@@ -77,13 +74,21 @@ public class SearchManager {
 		} else {
 			createDirectory(fileDir);
 		}
+		iwConfig = new IndexWriterConfig(VERSION, analyzer);
+		iwConfig.setOpenMode(OpenMode.APPEND);
+		iwConfig.setRAMBufferSizeMB(MEMORY);
+		try {
+			iwriter = new IndexWriter(directory, iwConfig);
+		} catch (IOException e) {
+			logger.error("Error while opening IndexWriter!!!", e);
+		}
 	}
 
 	private void createDirectory(File fileDir) {
 		try {
 			directory = NIOFSDirectory.open(fileDir);
 		} catch (IOException e) {
-			logger.error(e);
+			logger.error("Error while creating directory!!!", e);
 		}
 	}
 
@@ -93,12 +98,16 @@ public class SearchManager {
 			iwConfig.setOpenMode(OpenMode.CREATE);
 			IndexWriter iwriter = new IndexWriter(directory, iwConfig);
 			iwriter.close();
-		} catch (CorruptIndexException e) {
-			logger.error(e);
-		} catch (LockObtainFailedException e) {
-			logger.error(e);
 		} catch (IOException e) {
-			logger.error(e);
+			logger.error("Error while clear lucene index!!!", e);
+		}
+	}
+
+	public void closeIndex() {
+		try {
+			iwriter.close();
+		} catch (IOException e) {
+			logger.error("Error while close IndexWriter!!!", e);
 		}
 	}
 
@@ -114,19 +123,7 @@ public class SearchManager {
 		doc.add(fldTime);
 		doc.add(fldFulltext);
 
-		IndexWriter iwriter = null;
-		try {
-			IndexWriterConfig iwConfig = new IndexWriterConfig(VERSION, analyzer);
-			iwConfig.setOpenMode(OpenMode.APPEND);
-			luceneWriteLock.lock();
-			iwriter = new IndexWriter(directory, iwConfig);
-			iwriter.addDocument(doc);
-		} finally {
-			if (iwriter != null) {
-				iwriter.close();
-			}
-			luceneWriteLock.unlock();
-		}
+		iwriter.addDocument(doc);
 	}
 
 	public void updateUrl(String url, String fulltext, String hash, long time) throws IOException {
@@ -141,19 +138,7 @@ public class SearchManager {
 		doc.add(fldTime);
 		doc.add(fldFulltext);
 
-		IndexWriter iwriter = null;
-		try {
-			IndexWriterConfig iwConfig = new IndexWriterConfig(VERSION, analyzer);
-			iwConfig.setOpenMode(OpenMode.APPEND);
-			luceneWriteLock.lock();
-			iwriter = new IndexWriter(directory, iwConfig);
-			iwriter.updateDocument(new Term(URL, url), doc);
-		} finally {
-			if (iwriter != null) {
-				iwriter.close();
-			}
-			luceneWriteLock.unlock();
-		}
+		iwriter.updateDocument(new Term(URL, url), doc);
 	}
 
 	private Field createFulltextField(String fulltext) {
