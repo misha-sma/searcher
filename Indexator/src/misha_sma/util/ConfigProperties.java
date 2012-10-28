@@ -37,7 +37,7 @@ public class ConfigProperties {
 			STOP_WORDS.add(tokenizer.nextToken());
 		}
 
-		System.out.println(PATH_2_LUCENE_INDEX + "  " + PATH_2_HTML + "  " + PATH_2_FULLTEXT);
+		logger.info(PATH_2_LUCENE_INDEX + "  " + PATH_2_HTML + "  " + PATH_2_FULLTEXT);
 	}
 
 	private ConfigProperties() {

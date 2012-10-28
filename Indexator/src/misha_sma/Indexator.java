@@ -2,6 +2,8 @@ package misha_sma;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.net.URLDecoder;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -24,6 +26,7 @@ import org.apache.http.params.BasicHttpParams;
 import org.apache.http.params.HttpConnectionParams;
 import org.apache.http.params.HttpParams;
 import org.apache.http.util.EntityUtils;
+import org.apache.log4j.Logger;
 
 import misha_sma.util.ConfigProperties;
 import misha_sma.util.Pair;
@@ -32,7 +35,6 @@ import misha_sma.util.Util;
 public class Indexator {
 	public static final int RANDOM_COUNT = 1000;
 	public static final int THREADS_COUNT = 10;
-	public static final int REQUESTS_COUNT = 10000;
 	public static final int TIMEOUT = 10000;
 	public static final long DELTA_INDEXING_TIME = 10000;
 	public static final String HREF = "href=\"";
@@ -52,6 +54,8 @@ public class Indexator {
 
 	private final static ExecutorService pool = Executors.newFixedThreadPool(THREADS_COUNT);
 
+	private static final Logger logger = Logger.getLogger(Indexator.class);
+
 	private static class SendUrl implements Runnable {
 		private String url;
 
@@ -69,23 +73,22 @@ public class Indexator {
 				HttpGet req = new HttpGet(url);
 				req.setHeader("User-agent",
 						"Mozilla/5.0 (X11; Ubuntu; Linux i686; rv:15.0) Gecko/20100101 Firefox/15.0.1");
-				// req.setHeader("Accept-Language",
-				// "ru-ru,ru;q=0.8,en-us;q=0.5,en;q=0.3");
 				httpclient.getParams().setParameter("http.protocol.max-redirects", 15);
 				httpclient.getParams().setParameter("http.protocol.reject-relative-redirect", false);
 				httpclient.getParams().setParameter(AllClientPNames.SO_TIMEOUT, TIMEOUT);
-				System.out.println("executing request to " + url);
-
+				logger.info("==Start executing request to " + url);
+				long initTime = System.currentTimeMillis();
 				HttpResponse rsp = httpclient.execute(req);
+				logger.info("==End executing request Time=" + (System.currentTimeMillis() - initTime));
 				HttpEntity entity = rsp.getEntity();
 
-				System.out.println("----------------------------------------");
-				System.out.println(rsp.getStatusLine());
+				logger.info("---------------HEADERS-------------------------");
+				logger.info(rsp.getStatusLine());
 				Header[] headers = rsp.getAllHeaders();
 				for (int i = 0; i < headers.length; i++) {
-					System.out.println(headers[i]);
+					logger.info(headers[i]);
 				}
-				System.out.println("----------------------------------------");
+				logger.info("----------------------------------------");
 				String mimeType = "text/html";
 				for (Header header : headers) {
 					if (header.getName().toLowerCase().equals("content-type")) {
@@ -110,6 +113,8 @@ public class Indexator {
 						Util.writeText2File(html, fullName);
 					}
 
+					logger.info("==Start run tika");
+					initTime = System.currentTimeMillis();
 					String[] args = new String[5];
 					args[0] = "java";
 					args[1] = "-jar";
@@ -117,21 +122,16 @@ public class Indexator {
 					args[3] = "-T";
 					args[4] = fullName;
 					String text = Util.runTika(args, new File("./"));
+					logger.info("==End run tika Time=" + (System.currentTimeMillis() - initTime));
 					Util.writeText2File(text, textName);
-					// StringTokenizer tokenizer = new StringTokenizer(text);
-					// StringBuilder builder = new StringBuilder();
-					// while (tokenizer.hasMoreTokens()) {
-					// String word = tokenizer.nextToken();
-					// builder.append(word).append(' ');
-					// }
-					// put builder.toString() to lucene
 
 					// find urls
 					List<String> urls = isBinary ? findUrlsBinary(text) : findUrls(html, url);
-					System.out.println("urls=" + urls);
+					logger.info("urls=" + urls);
 					String hash = Util.getMD5(text);
-					System.out.println("hash=" + hash);
+					logger.info("hash=" + hash);
 					if (hash == null) {
+						logger.error("Error!!! Hash is null!!!");
 						return;
 					}
 					synchronized (GLOBAL_SYNCHRONIZE_OBJECT) {
@@ -160,9 +160,9 @@ public class Indexator {
 					}
 				}
 			} catch (ClientProtocolException e) {
-				e.printStackTrace();
+				logger.error(e);
 			} catch (IOException e) {
-				e.printStackTrace();
+				logger.error(e);
 			} finally {
 				httpclient.getConnectionManager().shutdown();
 			}
@@ -189,7 +189,12 @@ public class Indexator {
 			} else if (!url.startsWith(HTTP)) {
 				url = "http://www." + url;
 			}
-			urls.add(url);
+			try {
+				String urlTrue = URLDecoder.decode(url, "UTF8");
+				urls.add(urlTrue);
+			} catch (UnsupportedEncodingException e) {
+				logger.error(e);
+			}
 		}
 		return urls;
 	}
@@ -211,7 +216,12 @@ public class Indexator {
 				url = url.startsWith(WWW) || url.startsWith("//") ? HTTP + "://" + url : url;
 				url = url.startsWith("/") ? baseUrl + url : url;
 				if (url.startsWith(HTTP) && checkExtension(url)) {
-					urls.add(url);
+					try {
+						String urlTrue = URLDecoder.decode(url, "UTF8");
+						urls.add(urlTrue);
+					} catch (UnsupportedEncodingException e) {
+						logger.error(e);
+					}
 				}
 			}
 			hrefIndex = body.indexOf(HREF, quoteIndex);
@@ -270,7 +280,12 @@ public class Indexator {
 		StringTokenizer tokenizer = new StringTokenizer(urlsStr);
 		while (tokenizer.hasMoreTokens()) {
 			String url = tokenizer.nextToken();
-			urls.add(url);
+			try {
+				String urlTrue = URLDecoder.decode(url, "UTF8");
+				urls.add(urlTrue);
+			} catch (UnsupportedEncodingException e) {
+				logger.error(e);
+			}
 		}
 		return urls;
 	}

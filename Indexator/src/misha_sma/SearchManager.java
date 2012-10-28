@@ -107,14 +107,7 @@ public class SearchManager {
 		StringField fldUrl = new StringField(URL, url, Store.YES);
 		StringField fldHash = new StringField(HASH, hash, Store.YES);
 		LongField fldTime = new LongField(TIME, time, Store.YES);
-		FieldType type = new FieldType();
-		type.setIndexed(true);
-		type.setOmitNorms(true);
-		type.setStored(true);
-		type.setStoreTermVectorOffsets(true);
-		type.setStoreTermVectorPositions(true);
-		type.setStoreTermVectors(true);
-		Field fldFulltext = new Field(FULLTEXT, fulltext, type);
+		Field fldFulltext = createFulltextField(fulltext);
 
 		doc.add(fldUrl);
 		doc.add(fldHash);
@@ -141,14 +134,7 @@ public class SearchManager {
 		StringField fldUrl = new StringField(URL, url, Store.YES);
 		StringField fldHash = new StringField(HASH, hash, Store.YES);
 		LongField fldTime = new LongField(TIME, time, Store.YES);
-		FieldType type = new FieldType();
-		type.setIndexed(true);
-		type.setOmitNorms(true);
-		type.setStored(true);
-		type.setStoreTermVectorOffsets(true);
-		type.setStoreTermVectorPositions(true);
-		type.setStoreTermVectors(true);
-		Field fldFulltext = new Field(FULLTEXT, fulltext, type);
+		Field fldFulltext = createFulltextField(fulltext);
 
 		doc.add(fldUrl);
 		doc.add(fldHash);
@@ -168,6 +154,17 @@ public class SearchManager {
 			}
 			luceneWriteLock.unlock();
 		}
+	}
+
+	private Field createFulltextField(String fulltext) {
+		FieldType type = new FieldType();
+		type.setIndexed(true);
+		type.setOmitNorms(true);
+		type.setStored(true);
+		type.setStoreTermVectorOffsets(true);
+		type.setStoreTermVectorPositions(true);
+		type.setStoreTermVectors(true);
+		return new Field(FULLTEXT, fulltext, type);
 	}
 
 	public Map<String, Pair<String, Long>> loadUrlsMap() {
