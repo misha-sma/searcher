@@ -60,7 +60,7 @@ public class HttpServer {
 					String query = andIndex > 0 ? url.substring(7, andIndex) : url.substring(7);
 					logger.info("query=" + query);
 					// RUSSIAN URL ENCODING
-					// SEARCH
+					SearchManager.getInstance().search(query, 1, 10);
 				} else {
 					writeHomePageResponse(HOME_PAGE);
 				}
@@ -126,7 +126,7 @@ public class HttpServer {
 		}
 		url = url.startsWith("/") ? url.substring(1) : url;
 		url = url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
-		return url.toLowerCase();
+		return url;
 	}
 
 }
