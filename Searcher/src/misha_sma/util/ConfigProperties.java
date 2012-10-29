@@ -12,6 +12,7 @@ import org.apache.log4j.Logger;
 public class ConfigProperties {
 	private static final Logger logger = Logger.getLogger(ConfigProperties.class);
 
+	public static final int PORT;
 	public static final String HTML_FORMAT = "html";
 	public static final String PATH_2_LUCENE_INDEX;
 	public static final String PATH_2_HTML;
@@ -27,6 +28,7 @@ public class ConfigProperties {
 			logger.error("Error: Can't load config.properties!", e);
 		}
 
+		PORT = Integer.parseInt(props.getProperty("port"));
 		PATH_2_LUCENE_INDEX = validatePath(props.getProperty("path2LuceneIndex"));
 		PATH_2_HTML = validatePath(props.getProperty("path2Html"));
 		PATH_2_FULLTEXT = validatePath(props.getProperty("path2Text"));

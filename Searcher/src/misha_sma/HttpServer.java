@@ -12,10 +12,14 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.StringTokenizer;
 
+import org.apache.log4j.Logger;
+
+import misha_sma.util.ConfigProperties;
 import misha_sma.util.Util;
 
 public class HttpServer {
-	public static final int PORT = 8080;
+	private static final Logger logger = Logger.getLogger(HttpServer.class);
+
 	public static final String HOME_PAGE;
 	public static byte[] faviconBytes;
 
@@ -28,9 +32,9 @@ public class HttpServer {
 			input.read(faviconBytes);
 			input.close();
 		} catch (FileNotFoundException e) {
-			e.printStackTrace();
+			logger.error(e);
 		} catch (IOException e) {
-			e.printStackTrace();
+			logger.error(e);
 		}
 	}
 
@@ -54,26 +58,25 @@ public class HttpServer {
 				} else if (url.startsWith("?query=")) {
 					int andIndex = url.indexOf('&');
 					String query = andIndex > 0 ? url.substring(7, andIndex) : url.substring(7);
-					System.err.println("query=" + query);
+					logger.info("query=" + query);
 					// RUSSIAN URL ENCODING
 					// SEARCH
 				} else {
-					writeResponse(HOME_PAGE);
+					writeHomePageResponse(HOME_PAGE);
 				}
-				// writeResponse("<html><body><h1>Hello from Habrahabr</h1></body></html>");
 			} catch (Throwable t) {
-				t.printStackTrace();
+				logger.error(t);
 			} finally {
 				try {
 					socket.close();
 				} catch (Throwable t) {
-					t.printStackTrace();
+					logger.error(t);
 				}
 			}
-			System.err.println("Client processing finished");
+			logger.info("----------------------Client processing finished---------------------------");
 		}
 
-		private void writeResponse(String html) throws Throwable {
+		private void writeHomePageResponse(String html) throws Throwable {
 			String response = "HTTP/1.1 200 OK\r\n" + "Server: misha-sma-Server/2012\r\n"
 					+ "Content-Type: text/html\r\n" + "Content-Length: " + html.length() + "\r\n"
 					+ "Connection: close\r\n\r\n";
@@ -96,7 +99,7 @@ public class HttpServer {
 			StringBuilder builder = new StringBuilder();
 			String line;
 			while ((line = br.readLine()) != null && !line.trim().isEmpty()) {
-				System.out.println("line=" + line);
+				logger.debug("line=" + line);
 				builder.append(line).append('\n');
 			}
 			return builder.toString();
@@ -104,10 +107,10 @@ public class HttpServer {
 	}
 
 	public static void main(String[] args) throws Throwable {
-		ServerSocket serverSocket = new ServerSocket(PORT);
+		ServerSocket serverSocket = new ServerSocket(ConfigProperties.PORT);
 		while (true) {
 			Socket socket = serverSocket.accept();
-			System.err.println("Client accepted");
+			logger.info("---------------Client accepted------------------------");
 			new Thread(new SocketProcessor(socket)).start();
 		}
 	}
