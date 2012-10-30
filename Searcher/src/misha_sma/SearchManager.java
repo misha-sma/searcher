@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 import java.util.StringTokenizer;
@@ -123,10 +124,10 @@ public class SearchManager {
 		analyzer.close();
 	}
 
-	public void search(String query, int number, int rows) throws ParseException, IOException {
+	public SearchResults search(String query, int number, int rows) throws ParseException, IOException {
 		query = queryValidate(query);
 		if (query == null) {
-			return;
+			return new SearchResults(new LinkedList<Pair<String, String>>(), 0, 0);
 		}
 
 		Query fulltextQuery = (new QueryParser(VERSION, FULLTEXT, analyzer)).parse(query);
@@ -150,12 +151,14 @@ public class SearchManager {
 			String snippet = fastHighlighter.getBestFragment(fieldQuery, dirReader, luceneId, FULLTEXT, SNIPPET_LENGTH,
 					fragListBuilder, fragmentsBuilder, PRE_TAGS, POST_TAGS, encoder);
 			logger.info("url=" + url + "  snippet=" + snippet);
+			urls.add(new Pair<String, String>(url, snippet));
 		}
 
-		int realHitsCount = Math.min(topDocs.totalHits, MAX_HITS_COUNT);
-		int totalTabsCount = realHitsCount / rows;
-		totalTabsCount += realHitsCount % rows == 0 ? 0 : 1;
-		System.out.println("totalHitsCount=" + realHitsCount + "  totalTabsCount=" + totalTabsCount);
+		int totalHitsCount = Math.min(topDocs.totalHits, MAX_HITS_COUNT);
+		int totalTabsCount = totalHitsCount / rows;
+		totalTabsCount += totalHitsCount % rows == 0 ? 0 : 1;
+		logger.info("totalHitsCount=" + totalHitsCount + "  totalTabsCount=" + totalTabsCount);
+		return new SearchResults(urls, totalHitsCount, totalTabsCount);
 	}
 
 	protected String queryValidate(String query) {

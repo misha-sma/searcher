@@ -15,16 +15,24 @@ import java.util.StringTokenizer;
 import org.apache.log4j.Logger;
 
 import misha_sma.util.ConfigProperties;
+import misha_sma.util.Pair;
 import misha_sma.util.Util;
 
 public class HttpServer {
 	private static final Logger logger = Logger.getLogger(HttpServer.class);
 
 	public static final String HOME_PAGE;
+	public static final String HOME_PAGE_BEGIN;
+	public static final String HOME_PAGE_END;
 	public static byte[] faviconBytes;
+
+	public static int HITS_COUNT = 10;
 
 	static {
 		HOME_PAGE = Util.loadText("web/index.html");
+		int endBodyIndex = HOME_PAGE.indexOf("</body>");
+		HOME_PAGE_BEGIN = HOME_PAGE.substring(0, endBodyIndex);
+		HOME_PAGE_END = HOME_PAGE.substring(endBodyIndex);
 		File file = new File("web/favicon.ico");
 		try {
 			FileInputStream input = new FileInputStream(file);
@@ -58,9 +66,29 @@ public class HttpServer {
 				} else if (url.startsWith("?query=")) {
 					int andIndex = url.indexOf('&');
 					String query = andIndex > 0 ? url.substring(7, andIndex) : url.substring(7);
-					logger.info("query=" + query);
+					int pageIndex = url.indexOf("&page=");
+					int page = 1;
+					if (pageIndex > 0) {
+						andIndex = url.indexOf('&', pageIndex + 6);
+						page = andIndex > 0 ? Integer.parseInt(url.substring(pageIndex + 6, andIndex)) : Integer
+								.parseInt(url.substring(pageIndex + 6));
+					}
+					logger.info("query=" + query + "  page=" + page);
 					// RUSSIAN URL ENCODING
-					SearchManager.getInstance().search(query, 1, 10);
+					SearchResults results = SearchManager.getInstance().search(query, page, HITS_COUNT);
+					StringBuilder builder = new StringBuilder(HOME_PAGE_BEGIN);
+					for (Pair<String, String> pair : results.getUrls()) {
+						builder.append("<a href=\"").append(pair.getLeft()).append("\">").append(pair.getLeft())
+								.append("</a><br>\n").append(pair.getRight()).append("<br><br>\n");
+					}
+					String baseUrl = "/?query=" + query + "&page=";
+					for (int i = 1; i <= results.getTotalTabsCount(); ++i) {
+						builder.append("<a href=\"").append(baseUrl).append(i).append("\">").append(i)
+								.append("</a>   ");
+					}
+					builder.append("<br><br>\n");
+					builder.append(HOME_PAGE_END);
+					writeHomePageResponse(builder.toString());
 				} else {
 					writeHomePageResponse(HOME_PAGE);
 				}
