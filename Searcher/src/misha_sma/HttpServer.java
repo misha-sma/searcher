@@ -8,8 +8,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.io.UnsupportedEncodingException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.URLDecoder;
 import java.util.StringTokenizer;
 
 import org.apache.log4j.Logger;
@@ -66,6 +68,11 @@ public class HttpServer {
 				} else if (url.startsWith("?query=")) {
 					int andIndex = url.indexOf('&');
 					String query = andIndex > 0 ? url.substring(7, andIndex) : url.substring(7);
+					try {
+						query = URLDecoder.decode(query, "UTF8");
+					} catch (UnsupportedEncodingException e) {
+						logger.error(e);
+					}
 					int pageIndex = url.indexOf("&page=");
 					int page = 1;
 					if (pageIndex > 0) {
@@ -81,12 +88,14 @@ public class HttpServer {
 						builder.append("<a href=\"").append(pair.getLeft()).append("\">").append(pair.getLeft())
 								.append("</a><br>\n").append(pair.getRight()).append("<br><br>\n");
 					}
-					String baseUrl = "/?query=" + query + "&page=";
-					for (int i = 1; i <= results.getTotalTabsCount(); ++i) {
-						builder.append("<a href=\"").append(baseUrl).append(i).append("\">").append(i)
-								.append("</a>   ");
+					if (results.getTotalTabsCount() > 1) {
+						String baseUrl = "/?query=" + query + "&page=";
+						for (int i = 1; i <= results.getTotalTabsCount(); ++i) {
+							builder.append("<a href=\"").append(baseUrl).append(i).append("\">").append(i)
+									.append("</a>   ");
+						}
+						builder.append("<br><br>\n");
 					}
-					builder.append("<br><br>\n");
 					builder.append(HOME_PAGE_END);
 					writeHomePageResponse(builder.toString());
 				} else {
@@ -106,8 +115,7 @@ public class HttpServer {
 
 		private void writeHomePageResponse(String html) throws Throwable {
 			String response = "HTTP/1.1 200 OK\r\n" + "Server: misha-sma-Server/2012\r\n"
-					+ "Content-Type: text/html\r\n" + "Content-Length: " + html.length() + "\r\n"
-					+ "Connection: close\r\n\r\n";
+					+ "Content-Type: text/html\r\n" + "Connection: close\r\n\r\n";
 			String result = response + html;
 			os.write(result.getBytes());
 			os.flush();

@@ -15,8 +15,7 @@ public class ConfigProperties {
 	public static final int PORT;
 	public static final String HTML_FORMAT = "html";
 	public static final String PATH_2_LUCENE_INDEX;
-	public static final String PATH_2_HTML;
-	public static final String PATH_2_FULLTEXT;
+	public static final String PATH_2_SUGGESTING_INDEX;
 	public static final Set<String> STOP_WORDS = new HashSet<String>(510);
 
 	static {
@@ -30,8 +29,7 @@ public class ConfigProperties {
 
 		PORT = Integer.parseInt(props.getProperty("port"));
 		PATH_2_LUCENE_INDEX = validatePath(props.getProperty("path2LuceneIndex"));
-		PATH_2_HTML = validatePath(props.getProperty("path2Html"));
-		PATH_2_FULLTEXT = validatePath(props.getProperty("path2Text"));
+		PATH_2_SUGGESTING_INDEX = validatePath(props.getProperty("path2SuggestingIndex"));
 
 		String stopWordsStr = Util.loadText("config/stopwords.txt");
 		StringTokenizer tokenizer = new StringTokenizer(stopWordsStr);
@@ -39,7 +37,7 @@ public class ConfigProperties {
 			STOP_WORDS.add(tokenizer.nextToken());
 		}
 
-		logger.info(PATH_2_LUCENE_INDEX + "  " + PATH_2_HTML + "  " + PATH_2_FULLTEXT);
+		logger.info(PATH_2_LUCENE_INDEX + "  " + PATH_2_SUGGESTING_INDEX);
 	}
 
 	private ConfigProperties() {
