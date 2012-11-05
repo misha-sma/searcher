@@ -14,5 +14,6 @@
 	<classpathentry kind="lib" path="lib/lucene-analyzers-common-4.0.0.jar" sourcepath="/home/misha-sma/Загрузки/lucene-4.0.0-src"/>
 	<classpathentry kind="lib" path="lib/lucene-queries-4.0.0.jar"/>
 	<classpathentry kind="lib" path="lib/lucene-queryparser-4.0.0.jar"/>
+	<classpathentry kind="lib" path="lib/tika-app-1.2.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

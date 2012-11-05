@@ -1,6 +1,5 @@
 package misha_sma;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
@@ -59,6 +58,8 @@ public class Indexator {
 	private final static ExecutorService pool = Executors.newFixedThreadPool(THREADS_COUNT);
 
 	private static final Logger logger = Logger.getLogger(Indexator.class);
+
+	private static double avgTikaTime = 0;
 
 	private static class SendUrl implements Runnable {
 		private String url;
@@ -124,14 +125,19 @@ public class Indexator {
 
 					logger.info("==Start run tika");
 					initTime = System.currentTimeMillis();
-					String[] args = new String[5];
-					args[0] = "java";
-					args[1] = "-jar";
-					args[2] = "lib/tika-app-1.2.jar";
-					args[3] = "-T";
-					args[4] = fullName;
-					String text = Util.runTika(args, new File("./"));
-					logger.info("==End run tika Time=" + (System.currentTimeMillis() - initTime));
+					// String[] args = new String[5];
+					// args[0] = "java";
+					// args[1] = "-jar";
+					// args[2] = "lib/tika-app-1.2.jar";
+					// args[3] = "-T";
+					// args[4] = fullName;
+					// String text = Util.runTika(args, new File("./"));
+
+					String text = TikaTextExtractor.extractText(fullName);
+
+					long tikaTime = System.currentTimeMillis() - initTime;
+					logger.info("==End run tika Time=" + tikaTime);
+					avgTikaTime += tikaTime;
 					Util.writeText2File(text, textName);
 
 					// find urls
@@ -163,6 +169,7 @@ public class Indexator {
 						if (currentUrlsCount >= URLS_COUNT) {
 							SearchManager.getInstance().closeIndex();
 							logger.info("END INDEXING!!!");
+							logger.info("average tika time=" + avgTikaTime / URLS_COUNT);
 							System.exit(0);
 						}
 						for (String parsedUrl : urls) {
