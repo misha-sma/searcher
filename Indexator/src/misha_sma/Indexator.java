@@ -5,12 +5,15 @@ import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.StringTokenizer;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -34,8 +37,8 @@ import misha_sma.util.Util;
 
 public class Indexator {
 	public static final int RANDOM_COUNT = 1000;
-	public static final int URLS_COUNT = 20;
-	public static final int THREADS_COUNT = 1;
+	public static final int URLS_COUNT = 100;
+	public static final int THREADS_COUNT = 8;
 	public static final int TIMEOUT = 10000;
 	public static final long DELTA_INDEXING_TIME = 10000;
 	public static final String HREF = "href=\"";
@@ -60,6 +63,9 @@ public class Indexator {
 	private static final Logger logger = Logger.getLogger(Indexator.class);
 
 	private static double avgTikaTime = 0;
+
+	private static volatile int currentThreadsCount = 0;
+	private static final int TOTAL_THREADS_COUNT = 3 * THREADS_COUNT;
 
 	private static class SendUrl implements Runnable {
 		private String url;
@@ -165,7 +171,7 @@ public class Indexator {
 							logger.info("==Add url " + url + " in lucene");
 							++currentUrlsCount;
 						}
-						waitedUrls.remove(url);
+						//waitedUrls.remove(url);
 						if (currentUrlsCount >= URLS_COUNT) {
 							SearchManager.getInstance().closeIndex();
 							logger.info("END INDEXING!!!");
@@ -181,11 +187,11 @@ public class Indexator {
 								currentTime = System.currentTimeMillis();
 								if (currentTime - value.getRight() > DELTA_INDEXING_TIME) {
 									waitedUrls.add(parsedUrl);
-									pool.submit(new SendUrl(parsedUrl));
+									// pool.submit(new SendUrl(parsedUrl));
 								}
 							} else {
 								waitedUrls.add(parsedUrl);
-								pool.submit(new SendUrl(parsedUrl));
+								// pool.submit(new SendUrl(parsedUrl));
 							}
 						}
 					}
@@ -195,6 +201,7 @@ public class Indexator {
 			} catch (IOException e) {
 				logger.error(e);
 			} finally {
+				--currentThreadsCount;
 				httpclient.getConnectionManager().shutdown();
 			}
 		}
@@ -298,7 +305,40 @@ public class Indexator {
 		loadExtensions();
 		List<String> urls = loadUrls();
 		urlsMap = SearchManager.getInstance().loadUrlsMap();
-		pool.submit(new SendUrl("http://ru.wikipedia.org/wiki/кассини-Гюйгенс"));
+		waitedUrls.add("http://ru.wikipedia.org/wiki/кассини-Гюйгенс");
+
+		ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+		final Runnable timerTask = new Runnable() {
+			@Override
+			public void run() {
+				synchronized (GLOBAL_SYNCHRONIZE_OBJECT) {
+					if (currentThreadsCount < TOTAL_THREADS_COUNT) {
+						int newThreadsCount = TOTAL_THREADS_COUNT - currentThreadsCount;
+						logger.info("currentThreadsCount=" + currentThreadsCount + " newThreadsCount="
+								+ newThreadsCount + " waited.size=" + waitedUrls.size());
+						List<String> newUrls = new LinkedList<String>();
+						int counter = 0;
+						for (String url : waitedUrls) {
+							++counter;
+							if (counter > newThreadsCount) {
+								break;
+							}
+							pool.submit(new SendUrl(url));
+							++currentThreadsCount;
+							newUrls.add(url);
+						}
+						for (String url : newUrls) {
+							waitedUrls.remove(url);
+						}
+					}
+				}
+			}
+		};
+
+		scheduler.scheduleAtFixedRate(timerTask, 0, 15, TimeUnit.SECONDS);
+
+		// pool.submit(new
+		// SendUrl("http://ru.wikipedia.org/wiki/кассини-Гюйгенс"));
 		// pool.submit(new
 		// SendUrl("http://en.wikipedia.org/wiki/Cassini%E2%80%93Huygens"));
 		// pool.submit(new
