@@ -53,7 +53,8 @@ public class SearchManager {
 	public static final Version VERSION = Version.LUCENE_40;
 	public static final int MEMORY = 64;
 
-	private final Set<String> selectFields = new HashSet<String>();
+	private final Set<String> selectFieldsSet = new HashSet<String>();
+	private final Set<String> selectFieldsMap = new HashSet<String>();
 
 	private Directory directory;
 	private Analyzer analyzer;
@@ -61,9 +62,10 @@ public class SearchManager {
 	IndexWriter iwriter;
 
 	private SearchManager() {
-		selectFields.add(URL);
-		selectFields.add(TIME);
-		selectFields.add(HASH);
+		selectFieldsSet.add(URL);
+		selectFieldsMap.add(URL);
+		selectFieldsMap.add(TIME);
+		selectFieldsMap.add(HASH);
 		CharArraySet stopWords = new CharArraySet(VERSION, ConfigProperties.STOP_WORDS, true);
 		analyzer = new StandardAnalyzer(VERSION, stopWords);
 		File fileDir = new File(ConfigProperties.PATH_2_LUCENE_INDEX);
@@ -158,7 +160,7 @@ public class SearchManager {
 		try {
 			DirectoryReader dirReader = DirectoryReader.open(directory);
 			for (int id = 0; id < dirReader.maxDoc(); ++id) {
-				Document doc = dirReader.document(id, selectFields);
+				Document doc = dirReader.document(id, selectFieldsMap);
 				if (doc == null) {
 					logger.error("Error!!! Document with id=" + id + " is null!");
 					continue;
@@ -169,10 +171,34 @@ public class SearchManager {
 				Long time = (Long) doc.getField(TIME).numericValue();
 				urlMap.put(url, new Pair<String, Long>(hash, time));
 			}
+			dirReader.close();
 		} catch (IOException e) {
 			logger.error("Error while load urls map!!!", e);
 		}
 		logger.info("LOAD URLS TIME=" + (System.currentTimeMillis() - initTime));
 		return urlMap;
+	}
+
+	public Set<String> loadUrlsSet() {
+		long initTime = System.currentTimeMillis();
+		Set<String> urlsSet = new HashSet<String>();
+		try {
+			DirectoryReader dirReader = DirectoryReader.open(directory);
+			for (int id = 0; id < dirReader.maxDoc(); ++id) {
+				Document doc = dirReader.document(id, selectFieldsSet);
+				if (doc == null) {
+					logger.error("Error!!! Document with id=" + id + " is null!");
+					continue;
+				}
+
+				String url = doc.get(URL);
+				urlsSet.add(url);
+			}
+			dirReader.close();
+		} catch (IOException e) {
+			logger.error("Error while load urls set!!!", e);
+		}
+		logger.info("LOAD URLS TIME=" + (System.currentTimeMillis() - initTime));
+		return urlsSet;
 	}
 }

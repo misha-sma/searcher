@@ -7,7 +7,6 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.StringTokenizer;
 import java.util.concurrent.ExecutorService;
@@ -32,7 +31,6 @@ import org.apache.http.util.EntityUtils;
 import org.apache.log4j.Logger;
 
 import misha_sma.util.ConfigProperties;
-import misha_sma.util.Pair;
 import misha_sma.util.Util;
 
 public class Indexator {
@@ -54,8 +52,11 @@ public class Indexator {
 			+ "((\\u002F)[\\p{Alnum}\\u002D\\u0026\\u002B\\u005F\\u003F\\u003D\\u0023\\u0025\\u002F\\u002E]*)?";
 	public static final Pattern URL_PATTERN = Pattern.compile(REGEXP_URL);
 
-	public static Map<String, Pair<String, Long>> urlsMap;
+	public static Set<String> urlsSet;
 	public static Set<String> waitedUrls = new HashSet<String>();
+	public static Set<String> badUrls = new HashSet<String>();
+	public static Set<String> runnedUrls = new HashSet<String>();
+
 	public static final Object GLOBAL_SYNCHRONIZE_OBJECT = new Object();
 
 	private final static ExecutorService pool = Executors.newFixedThreadPool(THREADS_COUNT);
@@ -76,6 +77,7 @@ public class Indexator {
 
 		@Override
 		public void run() {
+			boolean isOk = false;
 			HttpParams httpParams = new BasicHttpParams();
 			HttpConnectionParams.setConnectionTimeout(httpParams, TIMEOUT);
 			HttpConnectionParams.setSoTimeout(httpParams, TIMEOUT);
@@ -148,7 +150,7 @@ public class Indexator {
 
 					// find urls
 					List<String> urls = isBinary ? findUrlsBinary(text) : findUrls(html, url);
-					logger.info("urls=" + urls);
+					// logger.info("urls=" + urls);
 					String hash = Util.getMD5(text);
 					logger.info("hash=" + hash);
 					if (hash == null) {
@@ -157,21 +159,14 @@ public class Indexator {
 					}
 					synchronized (GLOBAL_SYNCHRONIZE_OBJECT) {
 						long currentTime = System.currentTimeMillis();
-						if (urlsMap.containsKey(url)) {
-							Pair<String, Long> value = urlsMap.get(url);
-							if (currentTime - value.getRight() > DELTA_INDEXING_TIME && !hash.equals(value.getLeft())) {
-								SearchManager.getInstance().updateUrl(url, text, hash, currentTime);
-								urlsMap.put(url, new Pair<String, Long>(hash, currentTime));
-								logger.info("==Update url " + url + " in lucene");
-								++currentUrlsCount;
-							}
-						} else {
+						if (!urlsSet.contains(url)) {
 							SearchManager.getInstance().addUrlToIndex(url, text, hash, currentTime);
-							urlsMap.put(url, new Pair<String, Long>(hash, currentTime));
+							urlsSet.add(url);
 							logger.info("==Add url " + url + " in lucene");
 							++currentUrlsCount;
 						}
-						//waitedUrls.remove(url);
+						runnedUrls.remove(url);
+						isOk = true;
 						if (currentUrlsCount >= URLS_COUNT) {
 							SearchManager.getInstance().closeIndex();
 							logger.info("END INDEXING!!!");
@@ -179,20 +174,11 @@ public class Indexator {
 							System.exit(0);
 						}
 						for (String parsedUrl : urls) {
-							if (waitedUrls.contains(parsedUrl)) {
+							if (waitedUrls.contains(parsedUrl) || urlsSet.contains(parsedUrl)
+									|| badUrls.contains(parsedUrl) || runnedUrls.contains(parsedUrl)) {
 								continue;
 							}
-							if (urlsMap.containsKey(parsedUrl)) {
-								Pair<String, Long> value = urlsMap.get(parsedUrl);
-								currentTime = System.currentTimeMillis();
-								if (currentTime - value.getRight() > DELTA_INDEXING_TIME) {
-									waitedUrls.add(parsedUrl);
-									// pool.submit(new SendUrl(parsedUrl));
-								}
-							} else {
-								waitedUrls.add(parsedUrl);
-								// pool.submit(new SendUrl(parsedUrl));
-							}
+							waitedUrls.add(parsedUrl);
 						}
 					}
 				}
@@ -201,6 +187,12 @@ public class Indexator {
 			} catch (IOException e) {
 				logger.error(e);
 			} finally {
+				if (!isOk) {
+					synchronized (GLOBAL_SYNCHRONIZE_OBJECT) {
+						badUrls.add(url);
+						runnedUrls.remove(url);
+					}
+				}
 				--currentThreadsCount;
 				httpclient.getConnectionManager().shutdown();
 			}
@@ -304,7 +296,7 @@ public class Indexator {
 	public static void main(String[] args) {
 		loadExtensions();
 		List<String> urls = loadUrls();
-		urlsMap = SearchManager.getInstance().loadUrlsMap();
+		urlsSet = SearchManager.getInstance().loadUrlsSet();
 		waitedUrls.add("http://ru.wikipedia.org/wiki/кассини-Гюйгенс");
 
 		ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
@@ -315,9 +307,10 @@ public class Indexator {
 					if (currentThreadsCount < TOTAL_THREADS_COUNT) {
 						int newThreadsCount = TOTAL_THREADS_COUNT - currentThreadsCount;
 						logger.info("currentThreadsCount=" + currentThreadsCount + " newThreadsCount="
-								+ newThreadsCount + " waited.size=" + waitedUrls.size());
-						List<String> newUrls = new LinkedList<String>();
+								+ newThreadsCount + " waited.size=" + waitedUrls.size() + " badUrls.size="
+								+ badUrls.size() + " runnedUrls.size=" + runnedUrls.size());
 						int counter = 0;
+						LinkedList<String> urls4Remove = new LinkedList<String>();
 						for (String url : waitedUrls) {
 							++counter;
 							if (counter > newThreadsCount) {
@@ -325,11 +318,10 @@ public class Indexator {
 							}
 							pool.submit(new SendUrl(url));
 							++currentThreadsCount;
-							newUrls.add(url);
+							runnedUrls.add(url);
+							urls4Remove.add(url);
 						}
-						for (String url : newUrls) {
-							waitedUrls.remove(url);
-						}
+						waitedUrls.removeAll(urls4Remove);
 					}
 				}
 			}
