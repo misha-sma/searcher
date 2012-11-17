@@ -168,6 +168,7 @@ public class Indexator {
 						runnedUrls.remove(url);
 						isOk = true;
 						if (currentUrlsCount >= URLS_COUNT) {
+							SearchManager.getInstance().optimizeIndex();
 							SearchManager.getInstance().closeIndex();
 							logger.info("END INDEXING!!!");
 							logger.info("average tika time=" + avgTikaTime / URLS_COUNT);

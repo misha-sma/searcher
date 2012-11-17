@@ -25,6 +25,10 @@ import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.index.IndexWriterConfig.OpenMode;
 import org.apache.lucene.index.Term;
+import org.apache.lucene.search.IndexSearcher;
+import org.apache.lucene.search.NumericRangeQuery;
+import org.apache.lucene.search.ScoreDoc;
+import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.NIOFSDirectory;
 import org.apache.lucene.util.Version;
@@ -55,17 +59,19 @@ public class SearchManager {
 
 	private final Set<String> selectFieldsSet = new HashSet<String>();
 	private final Set<String> selectFieldsMap = new HashSet<String>();
+	private final Set<String> selectFieldsHashMap = new HashSet<String>();
 
 	private Directory directory;
 	private Analyzer analyzer;
-	IndexWriterConfig iwConfig;
-	IndexWriter iwriter;
+	private IndexWriter iwriter;
 
 	private SearchManager() {
 		selectFieldsSet.add(URL);
 		selectFieldsMap.add(URL);
 		selectFieldsMap.add(TIME);
 		selectFieldsMap.add(HASH);
+		selectFieldsHashMap.add(URL);
+		selectFieldsHashMap.add(HASH);
 		CharArraySet stopWords = new CharArraySet(VERSION, ConfigProperties.STOP_WORDS, true);
 		analyzer = new StandardAnalyzer(VERSION, stopWords);
 		File fileDir = new File(ConfigProperties.PATH_2_LUCENE_INDEX);
@@ -76,7 +82,7 @@ public class SearchManager {
 		} else {
 			createDirectory(fileDir);
 		}
-		iwConfig = new IndexWriterConfig(VERSION, analyzer);
+		IndexWriterConfig iwConfig = new IndexWriterConfig(VERSION, analyzer);
 		iwConfig.setOpenMode(OpenMode.APPEND);
 		iwConfig.setRAMBufferSizeMB(MEMORY);
 		try {
@@ -154,6 +160,16 @@ public class SearchManager {
 		return new Field(FULLTEXT, fulltext, type);
 	}
 
+	public void optimizeIndex() {
+		long initTime = System.currentTimeMillis();
+		try {
+			iwriter.forceMerge(1);
+		} catch (IOException e) {
+			logger.error("Error while optimizing index!!!", e);
+		}
+		logger.info("Optimizing time=" + (System.currentTimeMillis() - initTime) + " ms");
+	}
+
 	public Map<String, Pair<String, Long>> loadUrlsMap() {
 		long initTime = System.currentTimeMillis();
 		Map<String, Pair<String, Long>> urlMap = new HashMap<String, Pair<String, Long>>();
@@ -177,6 +193,36 @@ public class SearchManager {
 		}
 		logger.info("LOAD URLS TIME=" + (System.currentTimeMillis() - initTime));
 		return urlMap;
+	}
+
+	public Map<String, String> loadUrlsHashMap() {
+		long initTime = System.currentTimeMillis();
+		Map<String, String> urlsMap = null;
+		try {
+			DirectoryReader dirReader = DirectoryReader.open(directory);
+			IndexSearcher isearcher = new IndexSearcher(dirReader);
+			NumericRangeQuery<Long> query = NumericRangeQuery.newLongRange(TIME, null, System.currentTimeMillis()
+					- ConfigProperties.UPDATE_TIME_INTERVAL, false, false);
+			TopDocs topDocs = isearcher.search(query, dirReader.maxDoc());
+			logger.info("Searched " + topDocs.totalHits + " urls");
+			urlsMap = new HashMap<String, String>(topDocs.totalHits);
+			for (ScoreDoc scoreDoc : topDocs.scoreDocs) {
+				Document doc = dirReader.document(scoreDoc.doc, selectFieldsHashMap);
+				if (doc == null) {
+					logger.error("Error!!! Document with id=" + scoreDoc.doc + " is null!");
+					continue;
+				}
+
+				String url = doc.get(URL);
+				String hash = doc.get(HASH);
+				urlsMap.put(url, hash);
+			}
+			dirReader.close();
+		} catch (IOException e) {
+			logger.error("Error while load urls hashmap!!!", e);
+		}
+		logger.info("LOAD URLS TIME=" + (System.currentTimeMillis() - initTime));
+		return urlsMap;
 	}
 
 	public Set<String> loadUrlsSet() {

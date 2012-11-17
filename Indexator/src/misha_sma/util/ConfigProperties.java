@@ -17,6 +17,7 @@ public class ConfigProperties {
 	public static final String PATH_2_HTML;
 	public static final String PATH_2_FULLTEXT;
 	public static final Set<String> STOP_WORDS = new HashSet<String>(510);
+	public static final long UPDATE_TIME_INTERVAL;
 
 	static {
 		Properties props = new Properties();
@@ -30,6 +31,7 @@ public class ConfigProperties {
 		PATH_2_LUCENE_INDEX = validatePath(props.getProperty("path2LuceneIndex"));
 		PATH_2_HTML = validatePath(props.getProperty("path2Html"));
 		PATH_2_FULLTEXT = validatePath(props.getProperty("path2Text"));
+		UPDATE_TIME_INTERVAL = Long.parseLong(props.getProperty("updateTimeInterval"));
 
 		String stopWordsStr = Util.loadText("config/stopwords.txt");
 		StringTokenizer tokenizer = new StringTokenizer(stopWordsStr);
@@ -37,7 +39,7 @@ public class ConfigProperties {
 			STOP_WORDS.add(tokenizer.nextToken());
 		}
 
-		logger.info(PATH_2_LUCENE_INDEX + "  " + PATH_2_HTML + "  " + PATH_2_FULLTEXT);
+		logger.info(PATH_2_LUCENE_INDEX + "  " + PATH_2_HTML + "  " + PATH_2_FULLTEXT + "  " + UPDATE_TIME_INTERVAL);
 	}
 
 	private ConfigProperties() {
