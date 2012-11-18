@@ -64,6 +64,8 @@ public class Indexator {
 	private static final Logger logger = Logger.getLogger(Indexator.class);
 
 	private static double avgTikaTime = 0;
+	private static volatile double avgAllTime = 0;
+	private static long totalTime = System.currentTimeMillis();
 
 	private static volatile int currentThreadsCount = 0;
 	private static final int TOTAL_THREADS_COUNT = 3 * THREADS_COUNT;
@@ -77,6 +79,7 @@ public class Indexator {
 
 		@Override
 		public void run() {
+			long initTimeAll = System.currentTimeMillis();
 			boolean isOk = false;
 			HttpParams httpParams = new BasicHttpParams();
 			HttpConnectionParams.setConnectionTimeout(httpParams, TIMEOUT);
@@ -171,7 +174,9 @@ public class Indexator {
 							SearchManager.getInstance().optimizeIndex();
 							SearchManager.getInstance().closeIndex();
 							logger.info("END INDEXING!!!");
-							logger.info("average tika time=" + avgTikaTime / URLS_COUNT);
+							logger.info("average tika time=" + avgTikaTime / URLS_COUNT + " ms");
+							logger.info("average all time=" + avgAllTime / URLS_COUNT + " ms");
+							logger.info("Total time=" + (System.currentTimeMillis() - totalTime) + " ms");
 							System.exit(0);
 						}
 						for (String parsedUrl : urls) {
@@ -196,6 +201,8 @@ public class Indexator {
 				}
 				--currentThreadsCount;
 				httpclient.getConnectionManager().shutdown();
+				long timeAll = System.currentTimeMillis() - initTimeAll;
+				avgAllTime += timeAll;
 			}
 		}
 	}
@@ -298,7 +305,8 @@ public class Indexator {
 		loadExtensions();
 		List<String> urls = loadUrls();
 		urlsSet = SearchManager.getInstance().loadUrlsSet();
-		waitedUrls.add("http://ru.wikipedia.org/wiki/кассини-Гюйгенс");
+//		waitedUrls.add("http://ru.wikipedia.org/wiki/кассини-Гюйгенс");
+		waitedUrls.add("http://descanso.jpl.nasa.gov/DPSummary/Descanso3--Cassini2.pdf");
 
 		ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
 		final Runnable timerTask = new Runnable() {
