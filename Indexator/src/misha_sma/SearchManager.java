@@ -149,6 +149,14 @@ public class SearchManager {
 		iwriter.updateDocument(new Term(URL, url), doc);
 	}
 
+	public void deleteUrl(String url) {
+		try {
+			iwriter.deleteDocuments(new Term(URL, url));
+		} catch (IOException e) {
+			logger.error("Error while deleting url from lucene!!!", e);
+		}
+	}
+
 	private Field createFulltextField(String fulltext) {
 		FieldType type = new FieldType();
 		type.setIndexed(true);

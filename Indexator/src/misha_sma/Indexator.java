@@ -305,8 +305,8 @@ public class Indexator {
 		loadExtensions();
 		List<String> urls = loadUrls();
 		urlsSet = SearchManager.getInstance().loadUrlsSet();
-//		waitedUrls.add("http://ru.wikipedia.org/wiki/кассини-Гюйгенс");
-		waitedUrls.add("http://descanso.jpl.nasa.gov/DPSummary/Descanso3--Cassini2.pdf");
+		waitedUrls.add("http://ru.wikipedia.org/wiki/кассини-Гюйгенс");
+//		waitedUrls.add("http://descanso.jpl.nasa.gov/DPSummary/Descanso3--Cassini2.pdf");
 
 		ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
 		final Runnable timerTask = new Runnable() {
