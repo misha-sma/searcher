@@ -63,7 +63,7 @@ public class Indexator {
 
 	private static final Logger logger = Logger.getLogger(Indexator.class);
 
-	private static double avgTikaTime = 0;
+	private static volatile double avgTikaTime = 0;
 	private static volatile double avgAllTime = 0;
 	private static long totalTime = System.currentTimeMillis();
 
@@ -154,16 +154,10 @@ public class Indexator {
 					// find urls
 					List<String> urls = isBinary ? findUrlsBinary(text) : findUrls(html, url);
 					// logger.info("urls=" + urls);
-					String hash = Util.getMD5(text);
-					logger.info("hash=" + hash);
-					if (hash == null) {
-						logger.error("Error!!! Hash is null!!!");
-						return;
-					}
 					synchronized (GLOBAL_SYNCHRONIZE_OBJECT) {
 						long currentTime = System.currentTimeMillis();
 						if (!urlsSet.contains(url)) {
-							SearchManager.getInstance().addUrlToIndex(url, text, hash, currentTime);
+							SearchManager.getInstance().addUrlToIndex(url, text, currentTime);
 							urlsSet.add(url);
 							logger.info("==Add url " + url + " in lucene");
 							++currentUrlsCount;
@@ -306,7 +300,7 @@ public class Indexator {
 		List<String> urls = loadUrls();
 		urlsSet = SearchManager.getInstance().loadUrlsSet();
 		waitedUrls.add("http://ru.wikipedia.org/wiki/кассини-Гюйгенс");
-//		waitedUrls.add("http://descanso.jpl.nasa.gov/DPSummary/Descanso3--Cassini2.pdf");
+		// waitedUrls.add("http://descanso.jpl.nasa.gov/DPSummary/Descanso3--Cassini2.pdf");
 
 		ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
 		final Runnable timerTask = new Runnable() {

@@ -8,7 +8,6 @@ import java.util.Map;
 import java.util.Set;
 
 import misha_sma.util.ConfigProperties;
-import misha_sma.util.Pair;
 
 import org.apache.log4j.Logger;
 import org.apache.lucene.analysis.Analyzer;
@@ -25,10 +24,6 @@ import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.index.IndexWriterConfig.OpenMode;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.search.IndexSearcher;
-import org.apache.lucene.search.NumericRangeQuery;
-import org.apache.lucene.search.ScoreDoc;
-import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.NIOFSDirectory;
 import org.apache.lucene.util.Version;
@@ -51,15 +46,12 @@ public class SearchManager {
 
 	public static final String URL = "url";
 	public static final String FULLTEXT = "fulltext";
-	public static final String HASH = "hash";
 	public static final String TIME = "time";
 
 	public static final Version VERSION = Version.LUCENE_40;
 	public static final int MEMORY = 64;
 
-	private final Set<String> selectFieldsSet = new HashSet<String>();
-	private final Set<String> selectFieldsMap = new HashSet<String>();
-	private final Set<String> selectFieldsHashMap = new HashSet<String>();
+	private final Set<String> selectFieldsSet = new HashSet<String>(1);
 
 	private Directory directory;
 	private Analyzer analyzer;
@@ -67,11 +59,6 @@ public class SearchManager {
 
 	private SearchManager() {
 		selectFieldsSet.add(URL);
-		selectFieldsMap.add(URL);
-		selectFieldsMap.add(TIME);
-		selectFieldsMap.add(HASH);
-		selectFieldsHashMap.add(URL);
-		selectFieldsHashMap.add(HASH);
 		CharArraySet stopWords = new CharArraySet(VERSION, ConfigProperties.STOP_WORDS, true);
 		analyzer = new StandardAnalyzer(VERSION, stopWords);
 		File fileDir = new File(ConfigProperties.PATH_2_LUCENE_INDEX);
@@ -114,39 +101,30 @@ public class SearchManager {
 	public void closeIndex() {
 		try {
 			iwriter.close();
+			directory.close();
+			analyzer.close();
 		} catch (IOException e) {
 			logger.error("Error while close IndexWriter!!!", e);
 		}
 	}
 
-	public void addUrlToIndex(String url, String fulltext, String hash, long time) throws IOException {
+	private Document createDocument(String url, String fulltext, long time) {
 		Document doc = new Document();
 		StringField fldUrl = new StringField(URL, url, Store.YES);
-		StringField fldHash = new StringField(HASH, hash, Store.YES);
 		LongField fldTime = new LongField(TIME, time, Store.YES);
 		Field fldFulltext = createFulltextField(fulltext);
-
 		doc.add(fldUrl);
-		doc.add(fldHash);
 		doc.add(fldTime);
 		doc.add(fldFulltext);
-
-		iwriter.addDocument(doc);
+		return doc;
 	}
 
-	public void updateUrl(String url, String fulltext, String hash, long time) throws IOException {
-		Document doc = new Document();
-		StringField fldUrl = new StringField(URL, url, Store.YES);
-		StringField fldHash = new StringField(HASH, hash, Store.YES);
-		LongField fldTime = new LongField(TIME, time, Store.YES);
-		Field fldFulltext = createFulltextField(fulltext);
+	public void addUrlToIndex(String url, String fulltext, long time) throws IOException {
+		iwriter.addDocument(createDocument(url, fulltext, time));
+	}
 
-		doc.add(fldUrl);
-		doc.add(fldHash);
-		doc.add(fldTime);
-		doc.add(fldFulltext);
-
-		iwriter.updateDocument(new Term(URL, url), doc);
+	public void updateUrl(String url, String fulltext, long time) throws IOException {
+		iwriter.updateDocument(new Term(URL, url), createDocument(url, fulltext, time));
 	}
 
 	public void deleteUrl(String url) {
@@ -178,61 +156,6 @@ public class SearchManager {
 		logger.info("Optimizing time=" + (System.currentTimeMillis() - initTime) + " ms");
 	}
 
-	public Map<String, Pair<String, Long>> loadUrlsMap() {
-		long initTime = System.currentTimeMillis();
-		Map<String, Pair<String, Long>> urlMap = new HashMap<String, Pair<String, Long>>();
-		try {
-			DirectoryReader dirReader = DirectoryReader.open(directory);
-			for (int id = 0; id < dirReader.maxDoc(); ++id) {
-				Document doc = dirReader.document(id, selectFieldsMap);
-				if (doc == null) {
-					logger.error("Error!!! Document with id=" + id + " is null!");
-					continue;
-				}
-
-				String url = doc.get(URL);
-				String hash = doc.get(HASH);
-				Long time = (Long) doc.getField(TIME).numericValue();
-				urlMap.put(url, new Pair<String, Long>(hash, time));
-			}
-			dirReader.close();
-		} catch (IOException e) {
-			logger.error("Error while load urls map!!!", e);
-		}
-		logger.info("LOAD URLS TIME=" + (System.currentTimeMillis() - initTime));
-		return urlMap;
-	}
-
-	public Map<String, String> loadUrlsHashMap() {
-		long initTime = System.currentTimeMillis();
-		Map<String, String> urlsMap = null;
-		try {
-			DirectoryReader dirReader = DirectoryReader.open(directory);
-			IndexSearcher isearcher = new IndexSearcher(dirReader);
-			NumericRangeQuery<Long> query = NumericRangeQuery.newLongRange(TIME, null, System.currentTimeMillis()
-					- ConfigProperties.UPDATE_TIME_INTERVAL, false, false);
-			TopDocs topDocs = isearcher.search(query, dirReader.maxDoc());
-			logger.info("Searched " + topDocs.totalHits + " urls");
-			urlsMap = new HashMap<String, String>(topDocs.totalHits);
-			for (ScoreDoc scoreDoc : topDocs.scoreDocs) {
-				Document doc = dirReader.document(scoreDoc.doc, selectFieldsHashMap);
-				if (doc == null) {
-					logger.error("Error!!! Document with id=" + scoreDoc.doc + " is null!");
-					continue;
-				}
-
-				String url = doc.get(URL);
-				String hash = doc.get(HASH);
-				urlsMap.put(url, hash);
-			}
-			dirReader.close();
-		} catch (IOException e) {
-			logger.error("Error while load urls hashmap!!!", e);
-		}
-		logger.info("LOAD URLS TIME=" + (System.currentTimeMillis() - initTime));
-		return urlsMap;
-	}
-
 	public Set<String> loadUrlsSet() {
 		long initTime = System.currentTimeMillis();
 		Set<String> urlsSet = new HashSet<String>();
@@ -254,5 +177,28 @@ public class SearchManager {
 		}
 		logger.info("LOAD URLS TIME=" + (System.currentTimeMillis() - initTime));
 		return urlsSet;
+	}
+
+	public Map<String, Long> loadUrlsMap() {
+		long initTime = System.currentTimeMillis();
+		Map<String, Long> urlsMap = new HashMap<String, Long>();
+		try {
+			DirectoryReader dirReader = DirectoryReader.open(directory);
+			for (int id = 0; id < dirReader.maxDoc(); ++id) {
+				Document doc = dirReader.document(id, selectFieldsSet);
+				if (doc == null) {
+					logger.error("Error!!! Document with id=" + id + " is null!");
+					continue;
+				}
+
+				String url = doc.get(URL);
+				urlsMap.put(url, (Long) doc.getField(TIME).numericValue());
+			}
+			dirReader.close();
+		} catch (IOException e) {
+			logger.error("Error while load urls set!!!", e);
+		}
+		logger.info("LOAD URLS TIME=" + (System.currentTimeMillis() - initTime));
+		return urlsMap;
 	}
 }

@@ -3,7 +3,7 @@ package misha_sma;
 import java.io.IOException;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -30,13 +30,13 @@ public class Updater {
 	public static final int RANDOM_COUNT = 1000;
 	public static final int THREADS_COUNT = 8;
 	public static final int TIMEOUT = 10000;
-	public static Map<String, String> urlsHashMap;
+	public static Set<String> urlsSet;
 	public static final Object GLOBAL_SYNCHRONIZE_OBJECT = new Object();
 	private final static ExecutorService pool = Executors.newFixedThreadPool(THREADS_COUNT);
 
 	private static final Logger logger = Logger.getLogger(Updater.class);
 
-	private static double avgTikaTime = 0;
+	private static volatile double avgTikaTime = 0;
 	private static volatile double avgAllTime = 0;
 	private static long totalTime = System.currentTimeMillis();
 
@@ -114,18 +114,9 @@ public class Updater {
 					avgTikaTime += tikaTime;
 					Util.writeText2File(text, textName);
 
-					String hash = Util.getMD5(text);
-					logger.info("hash=" + hash);
-					if (hash == null) {
-						logger.error("Error!!! Hash is null!!!");
-						return;
-					}
 					synchronized (GLOBAL_SYNCHRONIZE_OBJECT) {
-						String oldHash = urlsHashMap.get(url);
-						if (!oldHash.equals(hash)) {
-							SearchManager.getInstance().updateUrl(url, text, hash, System.currentTimeMillis());
-							logger.info("==Update url " + url + " in lucene");
-						}
+						SearchManager.getInstance().updateUrl(url, text, System.currentTimeMillis());
+						logger.info("==Update url " + url + " in lucene");
 						isOk = true;
 					}
 				}
@@ -151,9 +142,9 @@ public class Updater {
 	}
 
 	public static void main(String[] args) {
-		urlsHashMap = SearchManager.getInstance().loadUrlsHashMap();
+		urlsSet = SearchManager.getInstance().loadUrlsSet();
 		List<Future<?>> futures = new LinkedList<Future<?>>();
-		for (String url : urlsHashMap.keySet()) {
+		for (String url : urlsSet) {
 			Future<?> future = pool.submit(new SendUrl(url));
 			futures.add(future);
 		}
@@ -171,8 +162,8 @@ public class Updater {
 		SearchManager.getInstance().optimizeIndex();
 		SearchManager.getInstance().closeIndex();
 		logger.info("END UPDATING!!!");
-		logger.info("average tika time=" + avgTikaTime / urlsHashMap.size() + " ms");
-		logger.info("average all time=" + avgAllTime / urlsHashMap.size() + " ms");
+		logger.info("average tika time=" + avgTikaTime / urlsSet.size() + " ms");
+		logger.info("average all time=" + avgAllTime / urlsSet.size() + " ms");
 		logger.info("Total time=" + (System.currentTimeMillis() - totalTime) + " ms");
 	}
 
