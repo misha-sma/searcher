@@ -15,8 +15,8 @@ public class GetLuceneInfo {
 		Url4Sorting[] urlsArray = new Url4Sorting[urlsMap.size()];
 		int i = 0;
 		for (String url : urlsMap.keySet()) {
-			Long time = urlsMap.get(url);
-			urlsArray[i] = new Url4Sorting(url, "", time);
+			long time = urlsMap.get(url);
+			urlsArray[i] = new Url4Sorting(url, time);
 			++i;
 		}
 		Arrays.sort(urlsArray);

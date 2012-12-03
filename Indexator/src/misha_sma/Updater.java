@@ -142,7 +142,7 @@ public class Updater {
 	}
 
 	public static void main(String[] args) {
-		urlsSet = SearchManager.getInstance().loadUrlsSet();
+		urlsSet = SearchManager.getInstance().loadUrlsSet4Update();
 		List<Future<?>> futures = new LinkedList<Future<?>>();
 		for (String url : urlsSet) {
 			Future<?> future = pool.submit(new SendUrl(url));

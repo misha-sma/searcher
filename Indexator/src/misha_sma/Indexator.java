@@ -35,7 +35,7 @@ import misha_sma.util.Util;
 
 public class Indexator {
 	public static final int RANDOM_COUNT = 1000;
-	public static final int URLS_COUNT = 100;
+	public static final int URLS_COUNT = 10;
 	public static final int THREADS_COUNT = 8;
 	public static final int TIMEOUT = 10000;
 	public static final long DELTA_INDEXING_TIME = 10000;

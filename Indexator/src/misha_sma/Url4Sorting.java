@@ -2,12 +2,10 @@ package misha_sma;
 
 public class Url4Sorting implements Comparable<Url4Sorting> {
 	private String url;
-	private String hash;
 	private long time;
 
-	public Url4Sorting(String url, String hash, long time) {
+	public Url4Sorting(String url, long time) {
 		this.url = url;
-		this.hash = hash;
 		this.time = time;
 	}
 
@@ -17,14 +15,6 @@ public class Url4Sorting implements Comparable<Url4Sorting> {
 
 	public void setUrl(String url) {
 		this.url = url;
-	}
-
-	public String getHash() {
-		return hash;
-	}
-
-	public void setHash(String hash) {
-		this.hash = hash;
 	}
 
 	public long getTime() {
@@ -42,7 +32,7 @@ public class Url4Sorting implements Comparable<Url4Sorting> {
 
 	@Override
 	public String toString() {
-		return "url=" + url + "  hash=" + hash + "  time=" + time;
+		return "url=" + url + "  time=" + time;
 	}
 
 }

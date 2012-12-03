@@ -24,6 +24,10 @@ import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.index.IndexWriterConfig.OpenMode;
 import org.apache.lucene.index.Term;
+import org.apache.lucene.search.IndexSearcher;
+import org.apache.lucene.search.NumericRangeQuery;
+import org.apache.lucene.search.ScoreDoc;
+import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.NIOFSDirectory;
 import org.apache.lucene.util.Version;
@@ -52,6 +56,7 @@ public class SearchManager {
 	public static final int MEMORY = 64;
 
 	private final Set<String> selectFieldsSet = new HashSet<String>(1);
+	private final Set<String> selectFieldsMap = new HashSet<String>(2);
 
 	private Directory directory;
 	private Analyzer analyzer;
@@ -59,6 +64,8 @@ public class SearchManager {
 
 	private SearchManager() {
 		selectFieldsSet.add(URL);
+		selectFieldsMap.add(URL);
+		selectFieldsMap.add(TIME);
 		CharArraySet stopWords = new CharArraySet(VERSION, ConfigProperties.STOP_WORDS, true);
 		analyzer = new StandardAnalyzer(VERSION, stopWords);
 		File fileDir = new File(ConfigProperties.PATH_2_LUCENE_INDEX);
@@ -167,7 +174,34 @@ public class SearchManager {
 					logger.error("Error!!! Document with id=" + id + " is null!");
 					continue;
 				}
+				String url = doc.get(URL);
+				urlsSet.add(url);
+			}
+			dirReader.close();
+		} catch (IOException e) {
+			logger.error("Error while load urls set!!!", e);
+		}
+		logger.info("LOAD URLS TIME=" + (System.currentTimeMillis() - initTime));
+		return urlsSet;
+	}
 
+	public Set<String> loadUrlsSet4Update() {
+		long initTime = System.currentTimeMillis();
+		Set<String> urlsSet = null;
+		try {
+			DirectoryReader dirReader = DirectoryReader.open(directory);
+			IndexSearcher isearcher = new IndexSearcher(dirReader);
+			NumericRangeQuery<Long> query = NumericRangeQuery.newLongRange(TIME, null, System.currentTimeMillis()
+					- ConfigProperties.UPDATE_TIME_INTERVAL, false, false);
+			TopDocs topDocs = isearcher.search(query, dirReader.maxDoc());
+			logger.info("Searched " + topDocs.totalHits + " urls");
+			urlsSet = new HashSet<String>(topDocs.totalHits);
+			for (ScoreDoc scoreDoc : topDocs.scoreDocs) {
+				Document doc = dirReader.document(scoreDoc.doc, selectFieldsSet);
+				if (doc == null) {
+					logger.error("Error!!! Document with id=" + scoreDoc.doc + " is null!");
+					continue;
+				}
 				String url = doc.get(URL);
 				urlsSet.add(url);
 			}
@@ -185,12 +219,11 @@ public class SearchManager {
 		try {
 			DirectoryReader dirReader = DirectoryReader.open(directory);
 			for (int id = 0; id < dirReader.maxDoc(); ++id) {
-				Document doc = dirReader.document(id, selectFieldsSet);
+				Document doc = dirReader.document(id, selectFieldsMap);
 				if (doc == null) {
 					logger.error("Error!!! Document with id=" + id + " is null!");
 					continue;
 				}
-
 				String url = doc.get(URL);
 				urlsMap.put(url, (Long) doc.getField(TIME).numericValue());
 			}

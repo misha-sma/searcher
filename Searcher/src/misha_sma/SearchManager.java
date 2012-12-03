@@ -57,7 +57,6 @@ public class SearchManager {
 
 	public static final String URL = "url";
 	public static final String FULLTEXT = "fulltext";
-	public static final String HASH = "hash";
 	public static final String TIME = "time";
 
 	public static final Version VERSION = Version.LUCENE_40;
@@ -68,7 +67,7 @@ public class SearchManager {
 	public static final String[] PRE_TAGS = { "<font style=\"background-color: yellow;\">" };
 	public static final String[] POST_TAGS = { "</font>" };
 
-	private final Set<String> selectFields = new HashSet<String>();
+	private final Set<String> selectFields = new HashSet<String>(1);
 
 	private Directory directory;
 	private Analyzer analyzer;
@@ -118,10 +117,10 @@ public class SearchManager {
 		try {
 			dirReader.close();
 			directory.close();
+			analyzer.close();
 		} catch (IOException e) {
 			logger.error("Error while closing lucene index!!!", e);
 		}
-		analyzer.close();
 	}
 
 	public SearchResults search(String query, int number, int rows) throws ParseException, IOException {

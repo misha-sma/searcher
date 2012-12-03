@@ -144,6 +144,7 @@ public class HttpServer {
 
 	public static void main(String[] args) throws Throwable {
 		ServerSocket serverSocket = new ServerSocket(ConfigProperties.PORT);
+		logger.info("Server started!!!");
 		while (true) {
 			Socket socket = serverSocket.accept();
 			logger.info("---------------Client accepted------------------------");
