@@ -18,7 +18,24 @@ import org.apache.log4j.Logger;
 public class Util {
 	private static final Logger logger = Logger.getLogger(Util.class);
 
+	private static final char START_ENGLISH_CHAR = 'a';
+	private static final char END_ENGLISH_CHAR = 'z';
+	private static final char START_RUSSIAN_CHAR = 'а';
+	private static final char END_RUSSIAN_CHAR = 'я';
+	private static final char YO_CHAR = 'ё';
+
 	private Util() {
+	}
+
+	public static double calcValidPercent(String fulltext) {
+		int countTrue = 0;
+		for (int i = 0; i < fulltext.length(); ++i) {
+			char c = fulltext.charAt(i);
+			countTrue += c >= START_ENGLISH_CHAR && c <= END_ENGLISH_CHAR || c >= START_RUSSIAN_CHAR
+					&& c <= END_RUSSIAN_CHAR || c == YO_CHAR ? 1 : 0;
+		}
+		double percent = (double) countTrue / fulltext.length();
+		return percent;
 	}
 
 	public static String loadText(File file) {

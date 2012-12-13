@@ -35,10 +35,9 @@ import misha_sma.util.Util;
 
 public class Indexator {
 	public static final int RANDOM_COUNT = 1000;
-	public static final int URLS_COUNT = 10;
+	public static final int URLS_COUNT = 100;
 	public static final int THREADS_COUNT = 8;
 	public static final int TIMEOUT = 10000;
-	public static final long DELTA_INDEXING_TIME = 10000;
 	public static final String HREF = "href=\"";
 	public static final String HTTP = "http";
 	public static final String WWW = "www";
@@ -69,6 +68,9 @@ public class Indexator {
 
 	private static volatile int currentThreadsCount = 0;
 	private static final int TOTAL_THREADS_COUNT = 3 * THREADS_COUNT;
+
+	private static final double MIN_EN_RU_PERCENT = 0.5;
+	private static final double MIN_TEXT_LENGTH = 100;
 
 	private static class SendUrl implements Runnable {
 		private String url;
@@ -145,15 +147,35 @@ public class Indexator {
 					// String text = Util.runTika(args, new File("./"));
 
 					String text = TikaTextExtractor.extractText(fullName);
-
 					long tikaTime = System.currentTimeMillis() - initTime;
 					logger.info("==End run tika Time=" + tikaTime);
 					avgTikaTime += tikaTime;
-					Util.writeText2File(text, textName);
+
+					double pers = Util.calcValidPercent(text);
+					logger.info(url + " pers=" + pers + " length=" + text.length());
+					if (pers < MIN_EN_RU_PERCENT) {
+						return;
+					}
 
 					// find urls
 					List<String> urls = isBinary ? findUrlsBinary(text) : findUrls(html, url);
 					// logger.info("urls=" + urls);
+
+					if (text.length() < MIN_TEXT_LENGTH) {
+						synchronized (GLOBAL_SYNCHRONIZE_OBJECT) {
+							for (String parsedUrl : urls) {
+								if (waitedUrls.contains(parsedUrl) || urlsSet.contains(parsedUrl)
+										|| badUrls.contains(parsedUrl) || runnedUrls.contains(parsedUrl)) {
+									continue;
+								}
+								waitedUrls.add(parsedUrl);
+							}
+						}
+						return;
+					}
+
+					Util.writeText2File(text, textName);
+
 					synchronized (GLOBAL_SYNCHRONIZE_OBJECT) {
 						long currentTime = System.currentTimeMillis();
 						if (!urlsSet.contains(url)) {
