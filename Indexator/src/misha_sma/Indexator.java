@@ -36,7 +36,9 @@ import misha_sma.util.Util;
 public class Indexator {
 	public static final int RANDOM_COUNT = 1000;
 	public static final int URLS_COUNT = 100;
+	public static final int MAX_WAITED_URLS_COUNT = 20000;
 	public static final int THREADS_COUNT = 8;
+	public static final int SCHEDULER_PERIOD = 15;
 	public static final int TIMEOUT = 10000;
 	public static final String HREF = "href=\"";
 	public static final String HTTP = "http";
@@ -53,6 +55,7 @@ public class Indexator {
 
 	public static Set<String> urlsSet;
 	public static Set<String> waitedUrls = new HashSet<String>();
+	public static List<String> waitedUrlsList = new LinkedList<String>();
 	public static Set<String> badUrls = new HashSet<String>();
 	public static Set<String> runnedUrls = new HashSet<String>();
 
@@ -163,12 +166,15 @@ public class Indexator {
 
 					if (text.length() < MIN_TEXT_LENGTH) {
 						synchronized (GLOBAL_SYNCHRONIZE_OBJECT) {
-							for (String parsedUrl : urls) {
-								if (waitedUrls.contains(parsedUrl) || urlsSet.contains(parsedUrl)
-										|| badUrls.contains(parsedUrl) || runnedUrls.contains(parsedUrl)) {
-									continue;
+							if (waitedUrls.size() < MAX_WAITED_URLS_COUNT) {
+								for (String parsedUrl : urls) {
+									if (waitedUrls.contains(parsedUrl) || urlsSet.contains(parsedUrl)
+											|| badUrls.contains(parsedUrl) || runnedUrls.contains(parsedUrl)) {
+										continue;
+									}
+									waitedUrls.add(parsedUrl);
+									waitedUrlsList.add(parsedUrl);
 								}
-								waitedUrls.add(parsedUrl);
 							}
 						}
 						return;
@@ -195,12 +201,15 @@ public class Indexator {
 							logger.info("Total time=" + (System.currentTimeMillis() - totalTime) + " ms");
 							System.exit(0);
 						}
-						for (String parsedUrl : urls) {
-							if (waitedUrls.contains(parsedUrl) || urlsSet.contains(parsedUrl)
-									|| badUrls.contains(parsedUrl) || runnedUrls.contains(parsedUrl)) {
-								continue;
+						if (waitedUrls.size() < MAX_WAITED_URLS_COUNT) {
+							for (String parsedUrl : urls) {
+								if (waitedUrls.contains(parsedUrl) || urlsSet.contains(parsedUrl)
+										|| badUrls.contains(parsedUrl) || runnedUrls.contains(parsedUrl)) {
+									continue;
+								}
+								waitedUrls.add(parsedUrl);
+								waitedUrlsList.add(parsedUrl);
 							}
-							waitedUrls.add(parsedUrl);
 						}
 					}
 				}
@@ -321,7 +330,9 @@ public class Indexator {
 		loadExtensions();
 		List<String> urls = loadUrls();
 		urlsSet = SearchManager.getInstance().loadUrlsSet();
-		waitedUrls.add("http://ru.wikipedia.org/wiki/кассини-Гюйгенс");
+		String initUrl = "http://ru.wikipedia.org/wiki/кассини-Гюйгенс";
+		waitedUrls.add(initUrl);
+		waitedUrlsList.add(initUrl);
 		// waitedUrls.add("http://descanso.jpl.nasa.gov/DPSummary/Descanso3--Cassini2.pdf");
 
 		ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
@@ -332,11 +343,12 @@ public class Indexator {
 					if (currentThreadsCount < TOTAL_THREADS_COUNT) {
 						int newThreadsCount = TOTAL_THREADS_COUNT - currentThreadsCount;
 						logger.info("currentThreadsCount=" + currentThreadsCount + " newThreadsCount="
-								+ newThreadsCount + " waited.size=" + waitedUrls.size() + " badUrls.size="
-								+ badUrls.size() + " runnedUrls.size=" + runnedUrls.size());
+								+ newThreadsCount + " waited.size=" + waitedUrls.size() + " waitedList.size="
+								+ waitedUrlsList.size() + " badUrls.size=" + badUrls.size() + " runnedUrls.size="
+								+ runnedUrls.size());
 						int counter = 0;
 						LinkedList<String> urls4Remove = new LinkedList<String>();
-						for (String url : waitedUrls) {
+						for (String url : waitedUrlsList) {
 							++counter;
 							if (counter > newThreadsCount) {
 								break;
@@ -347,12 +359,15 @@ public class Indexator {
 							urls4Remove.add(url);
 						}
 						waitedUrls.removeAll(urls4Remove);
+						for (int i = 0; i < urls4Remove.size(); ++i) {
+							waitedUrlsList.remove(0);
+						}
 					}
 				}
 			}
 		};
 
-		scheduler.scheduleAtFixedRate(timerTask, 0, 15, TimeUnit.SECONDS);
+		scheduler.scheduleAtFixedRate(timerTask, 0, SCHEDULER_PERIOD, TimeUnit.SECONDS);
 
 		// pool.submit(new
 		// SendUrl("http://ru.wikipedia.org/wiki/кассини-Гюйгенс"));
